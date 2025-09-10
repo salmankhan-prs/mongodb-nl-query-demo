@@ -1,0 +1,83 @@
+{
+  "name": "mongodb-nl-query-demo",
+  "version": "1.0.0",
+  "description": "Transform any MongoDB database into a natural language interface using LangChain and LangGraph",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsup",
+    "start:dev": "tsx watch --clear-screen=false src/index.ts | pino-pretty",
+    "dev": "pnpm start:dev",
+    "start:prod": "node dist/index.js",
+    "seed": "tsx src/scripts/seedData.ts",
+    "test:system": "tsx src/scripts/testSystem.ts",
+    "generate:schemas": "tsup && node generateSchemas.js",
+    "setup": "pnpm install && cp .env.example .env && pnpm generate:schemas && pnpm seed",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --fix && biome format --write && biome check --write",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "pnpm lint && pnpm format:check && pnpm build",
+    "type-check": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/salmankhan-prs/mongodb-nl-query-demo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/salmankhan-prs/mongodb-nl-query-demo/issues"
+  },
+  "homepage": "https://github.com/salmankhan-prs/mongodb-nl-query-demo#readme",
+  "keywords": [
+    "mongodb",
+    "langchain",
+    "langgraph", 
+    "natural-language",
+    "database",
+    "ai",
+    "nlp",
+    "query-interface"
+  ],
+  "author": "Salman Khan",
+  "license": "MIT",
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.26",
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.8",
+    "@langchain/redis": "^0.1.1",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "envalid": "8.0.0",
+    "express": "4.21.2",
+    "express-rate-limit": "7.5.0",
+    "helmet": "8.0.0",
+    "http-status-codes": "2.3.0",
+    "ioredis": "^5.7.0",
+    "mongoose": "^8.12.1",
+    "nanoid": "^5.1.5",
+    "pino": "9.6.0",
+    "pino-http": "10.4.0",
+    "zod": "3.25.67"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.0.6",
+    "@types/cors": "2.8.17",
+    "@types/express": "5.0.0",
+    "pino-pretty": "13.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "tsup": "8.4.0",
+    "tsx": "4.19.3",
+    "typescript": "5.8.2"
+  },
+  "tsup": {
+    "entry": [
+      "src",
+      "!src/**/__tests__/**",
+      "!src/**/*.test.*"
+    ],
+    "splitting": false,
+    "sourcemap": true,
+    "clean": true
+  },
+  "packageManager": "pnpm@10.6.2"
+}
