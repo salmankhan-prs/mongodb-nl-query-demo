@@ -1,4 +1,4 @@
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+import { type AIMessage, HumanMessage } from "@langchain/core/messages";
 import type {
   AgentQueryResult,
   ClearSessionResult,

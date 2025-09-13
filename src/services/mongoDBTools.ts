@@ -4,8 +4,9 @@ import { z } from "zod";
 import { UserModel } from "../models/User";
 import { ProductModel } from "../models/Product";
 import { OrderModel } from "../models/Order";
-import { ECollectionNames, type ToolResult } from "../types";
+import { ECollectionNames, type SanitizeRules, type ToolResult } from "../types";
 import { getCollectionSchema } from "./schemaGenerator";
+import { aggregateToolRules } from "./aggregateToolRules.ts";
 
 type SortDirection = 1 | -1 | "asc" | "desc" | "ascending" | "descending";
 
@@ -44,6 +45,99 @@ const countParamsSchema = z.object({
 const collectionSchemaParamsSchema = z.object({
   collection: z.nativeEnum(ECollectionNames).describe("The collection name"),
 });
+
+
+/**
+ * Sanitizes a MongoDB aggregation pipeline by injecting predefined filter rules
+ * into stages that can reference other collections.
+ *
+ * Supported stages:
+ *  - $lookup: Prepends a $match stage to restrict documents from the "from" collection.
+ *  - $unionWith: Prepends a $match stage (or creates one if only collection name is provided).
+ *  - $facet: Recursively sanitizes each sub-pipeline.
+ *
+ * The `rules` parameter defines a map of { collectionName -> filterObject }.
+ * Whenever a stage references a collection listed in `rules`, the filterObject
+ * is automatically applied as a $match condition inside that stage.
+ *
+ * This ensures that sensitive collections are always queried with the proper
+ * restrictions, preventing unintended data exposure.
+ *
+ * @param pipeline The aggregation pipeline to sanitize.
+ * @param rules    A map of collection names to $match filters that must be enforced.
+ * @returns        A sanitized copy of the pipeline with enforced filters.
+ *
+ * @example
+ * const rules = {
+ *   users: { isActive: true },
+ *   orders: { status: "delivered" }
+ * };
+ *
+ * const pipeline = [
+ *   { $lookup: { from: "users", localField: "userId", foreignField: "_id" } },
+ *   { $unionWith: { coll: "orders", pipeline: [{ $project: { total: 1 } }] } }
+ * ];
+ *
+ * const sanitized = sanitizePipeline(pipeline, rules);
+ */
+
+export function sanitizePipeline(
+  pipeline: PipelineStage[],
+  rules: SanitizeRules
+): PipelineStage[] {
+  return pipeline.map((stage) => {
+    // --- $lookup handling ---
+    if ("$lookup" in stage) {
+      const lookup = stage.$lookup as any;
+
+      if (!lookup.pipeline) {
+        lookup.pipeline = [];
+      }
+
+      const rule = rules[lookup.from];
+      if (rule) {
+        lookup.pipeline = [{ $match: rule }, ...lookup.pipeline];
+      }
+
+      return { $lookup: lookup };
+    }
+
+    // --- $facet handling (recursive) ---
+    if ("$facet" in stage) {
+      const facet = stage.$facet as Record<string, PipelineStage[]>;
+      for (const key in facet) {
+        facet[key] = sanitizePipeline(facet[key], rules);
+      }
+      return { $facet: facet };
+    }
+
+    // --- $unionWith handling ---
+    if ("$unionWith" in stage) {
+      let union = stage.$unionWith as any;
+
+      if (typeof union === "string") {
+        const rule = rules[union];
+        if (rule) {
+          union = { coll: union, pipeline: [{ $match: rule }] };
+        } else {
+          union = { coll: union };
+        }
+      } else if (union.pipeline) {
+        union.pipeline = sanitizePipeline(union.pipeline, rules);
+
+        const rule = rules[union.coll];
+        if (rule) {
+          union.pipeline = [{ $match: rule }, ...union.pipeline];
+        }
+      }
+
+      return { $unionWith: union };
+    }
+
+    // leave other stages untouched
+    return stage;
+  }) as PipelineStage[];
+}
 
 /**
  * Factory class for creating MongoDB tools.
@@ -184,15 +278,18 @@ export class MongoDBToolsFactory {
       async (input: z.infer<typeof aggregateParamsSchema>) => {
         try {
           const { collection, pipeline } = input;
-
+          let sanitizedPipeline = pipeline;
+          if(Object.keys(aggregateToolRules).length !== 0) {
+            sanitizedPipeline = sanitizePipeline(pipeline, aggregateToolRules)
+          }
           const model = this.getModel(collection);
-          const documents = await model.aggregate(pipeline);
+          const documents = await model.aggregate(sanitizedPipeline);
 
           const result: ToolResult = {
             success: true,
             sessionId: sessionId,
             collection: collection,
-            pipeline_stages: pipeline.length,
+            pipeline_stages: sanitizedPipeline.length,
             results: documents.length,
             documents: documents,
           };

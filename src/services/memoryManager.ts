@@ -1,7 +1,7 @@
 import { RedisChatMessageHistory } from "@langchain/redis";
 import { env } from "../config/env";
 import type { MemoryConfig } from "../types";
-import { BaseMessage } from '@langchain/core/messages';
+import type { BaseMessage } from '@langchain/core/messages';
 
 export class ConversationMemoryManager {
   private memoryConfig: MemoryConfig;
