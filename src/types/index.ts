@@ -52,3 +52,5 @@ export interface ToolResult {
   error?: string;
   [key: string]: any;
 }
+
+export type SanitizeRules = Record<string, Record<string, any>>;
